@@ -17,7 +17,7 @@
 // Local-build fallback shown on the LCD when you compile in the Arduino IDE.
 // Bump this to match the release tag you're flashing. CI auto-overrides it with
 // the git tag, so OTA builds always show the exact released version.
-#define FIRMWARE_VERSION "v1.53"
+#define FIRMWARE_VERSION "v1.54"
 #endif
 
 
@@ -418,23 +418,44 @@ if (message.startsWith("update:")) {
   String url = message.substring(7);
   Serial.println("Starting OTA update from: " + url);
 
+  // Tell the operator we started (flush before the long, blocking download)
+  updateLCDStatus("OTA: downloading");
+  mqtt.publish(commandFeedPath.c_str(), "RESP: OTA starting, downloading firmware...");
+  mqtt.loop();
+  delay(100);
+
   WiFiClientSecure secureClient;
   secureClient.setInsecure();  // Disable certificate validation
 
-  httpUpdate.rebootOnUpdate(true);
+  httpUpdate.rebootOnUpdate(false);  // Reboot manually so we can confirm success first
   httpUpdate.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
 
   t_httpUpdate_return ret = httpUpdate.update(secureClient, url);
 
   switch (ret) {
-    case HTTP_UPDATE_FAILED:
-      Serial.printf("OTA failed: %s\n", httpUpdate.getLastErrorString().c_str());
+    case HTTP_UPDATE_FAILED: {
+      String err = "RESP: OTA FAILED (" + String(httpUpdate.getLastError()) + "): "
+                   + httpUpdate.getLastErrorString();
+      Serial.println(err);
+      mqtt.publish(commandFeedPath.c_str(), err.c_str());
+      updateLCDStatus("OTA Failed");
       break;
+    }
     case HTTP_UPDATE_NO_UPDATES:
       Serial.println("OTA: No update available.");
+      mqtt.publish(commandFeedPath.c_str(), "RESP: OTA: no update available");
+      updateLCDStatus("OTA No Update");
       break;
     case HTTP_UPDATE_OK:
-      Serial.println("OTA: Update successful!");
+      // Download/flash succeeded. Persist a flag so we can confirm the NEW version
+      // on the command feed after the reboot (we can't publish post-flash reliably).
+      Serial.println("OTA: Update downloaded. Rebooting to apply...");
+      preferences.putBool("otaPending", true);
+      updateLCDStatus("OTA OK: reboot");
+      mqtt.publish(commandFeedPath.c_str(), "RESP: OTA downloaded OK, rebooting to apply...");
+      mqtt.loop();
+      delay(200);
+      ESP.restart();
       break;
   }
   return;
@@ -695,11 +716,24 @@ void setup() {
 
   // Send initial data to Adafruit IO only if connected
   Serial.println("Checking MQTT connection...");
+  // Did we just reboot from an OTA? Read and clear the flag unconditionally so a
+  // later normal reboot can never falsely report success.
+  bool otaJustUpdated = preferences.getBool("otaPending", false);
+  if (otaJustUpdated) {
+    preferences.putBool("otaPending", false);
+    Serial.println("OTA SUCCESS: now running " FIRMWARE_VERSION);
+    updateLCDStatus("OTA OK " FIRMWARE_VERSION);
+  }
+
   if (mqtt.connected()) {
     // Send the pulse data
     sendPulseData(true); // Force send initial data
-    String bootMsg = "RESP: Booted " FIRMWARE_VERSION;
-    mqtt.publish(commandFeedPath.c_str(), bootMsg.c_str());
+
+    if (otaJustUpdated) {
+      mqtt.publish(commandFeedPath.c_str(), "RESP: OTA SUCCESS: now running " FIRMWARE_VERSION);
+    } else {
+      mqtt.publish(commandFeedPath.c_str(), "RESP: Booted " FIRMWARE_VERSION);
+    }
 
   } else {
     Serial.println("MQTT not connected. Will send data once connected in main loop.");
