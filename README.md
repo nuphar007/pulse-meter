@@ -6,11 +6,19 @@ mirrors them to a `games` output, shows status on a 20x4 LCD, and reports to
 username/key, counters, debounce) is done over WiFi via a built-in web page, and
 firmware updates are delivered over-the-air (OTA).
 
+## Documentation
+
+- **[docs/USER-GUIDE.md](docs/USER-GUIDE.md)** — operating & configuring devices and the
+  dashboard (setup, web page, command feed, OTA, recovery, troubleshooting).
+- **[docs/ENGINEERING.md](docs/ENGINEERING.md)** — architecture, hardware, data model,
+  OTA/CI pipeline, NVS reference, and how to change the firmware.
+
 ## Repo layout
 
 ```
 pulse-meter/pulse-meter.ino       # the sketch (single source of truth)
 .github/workflows/build.yml       # CI: compile + publish firmware on each tag
+docs/                             # user & engineering manuals
 ```
 
 The firmware version comes from the **git tag** at build time (injected into
