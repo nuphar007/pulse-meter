@@ -14,33 +14,15 @@
 #endif
 
 #ifndef FIRMWARE_VERSION
-#define FIRMWARE_VERSION "v1.51-dev"   // Default; CI overrides this with the git tag at build time
+// Local-build fallback shown on the LCD when you compile in the Arduino IDE.
+// Bump this to match the release tag you're flashing. CI auto-overrides it with
+// the git tag, so OTA builds always show the exact released version.
+#define FIRMWARE_VERSION "v1.53"
 #endif
 
 
-// Revision Log
-// v1.31 - Added web configuration, AP mode, and dynamic device ID
-// v1.32 - Fixed MQTT connection issues and improved connection reliability
-// v1.33 - Added heartbeat signaling on initial connection and reconnection
-// v1.34 - Optimized LCD messages to fit better on screen
-// v1.35 - Reduced serial output to only print counters on change or every 10 minutes
-// v1.36 - Fixed counter reporting to strictly only report on change or every 10 minutes
-// v1.37 - Fixed IP address display on LCD by showing full IP and shifting left
-// v1.38 - Fixed compilation issues with include statements
-// v1.39 - Optimized MQTT traffic to only send when counters change or at 10-minute intervals
-// v1.40 - Streamlined serial output to reduce repetitive messages
-// v1.41 - Added heartbeat value confirmation and removed redundant octet display
-// v1.42 - Replaced numeric heartbeat with descriptive status messages
-// v1.43 - Enhanced MQTT connection stability with improved reconnection logic
-// v1.44  - Implemented proper LWT using PubSubClient library
-// v1.45  - Simplified to use regular status updates instead of LWT
-// v1.46 - IMplement MQTT OTA updaye from adafruit  
-// v1.47 - implement webform to update counter values
-// v1.48 - implement webform to update debounce
-// v1.49 - implement version in code
-// v1.50 - make Adafruit IO username configurable via web form (stored in NVS)
-// v1.51 - GitHub CI/CD: tagged release builds firmware.bin and publishes it for OTA
-// v1.52 - remove hardcoded Adafruit IO key from source (key lives only in NVS); public OTA
+// Revision history is tracked via git tags / GitHub Releases:
+//   https://github.com/nuphar007/pulse-meter/releases
 
 
 Preferences preferences; // Create a Preferences object for NVS
@@ -959,8 +941,8 @@ void loop() {
     lcd.print("Device: ");
     lcd.print(deviceID);
     
-    // Display status and full IP address, shifted left by 4 characters
-    updateLCDStatus("RunOK");
+    // Bottom row: firmware version (always visible) + full IP address
+    updateLCDStatus(FIRMWARE_VERSION);
     lcd.setCursor(6, 3); // Position for IP display, shifted left
     lcd.print(WiFi.localIP().toString());
     
