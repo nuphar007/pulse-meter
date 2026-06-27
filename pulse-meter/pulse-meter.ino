@@ -32,8 +32,9 @@
 // Always-latest release asset URL (GitHub redirects this to the newest release).
 #define OTA_LATEST_URL "https://github.com/" OTA_REPO "/releases/latest/download/firmware.bin"
 
-// ESP32 trusted-root CA bundle (built into the core) for optional OTA cert validation (#7).
-extern const uint8_t rootca_crt_bundle_start[] asm("_binary_data_cert_x509_crt_bundle_bin_start");
+// #7: when "OTA secure" is on, OTA is restricted to the official GitHub releases
+// (blocks an attacker who can publish to the command feed from pushing arbitrary firmware).
+#define OTA_OFFICIAL_PREFIX "https://github.com/" OTA_REPO "/releases/"
 
 // Watchdog: reboots the device if loop() ever hangs longer than this. Generous so
 // normal blocking work (boot connect, OTA download) never trips it (#4).
@@ -161,15 +162,21 @@ String uptimeString() {
 
 // ---------- OTA (#1 web, #5 auto, #7 integrity) ----------
 void configureOTAClient(WiFiClientSecure &client) {
-  if (otaSecure) {
-    client.setCACertBundle(rootca_crt_bundle_start); // validate against trusted roots
-  } else {
-    client.setInsecure();                            // proven default
-  }
+  // Transport: GitHub HTTPS. Cert pinning is unreliable across GitHub's redirect host,
+  // so we keep the proven insecure transport and gate integrity on the source URL instead.
+  client.setInsecure();
 }
 
 void performOTA(const String &url, const char *source) {
   Serial.printf("OTA from %s: %s\n", source, url.c_str());
+
+  // #7: official-source allowlist (only enforced when otaSecure is on).
+  if (otaSecure && !url.startsWith(OTA_OFFICIAL_PREFIX)) {
+    Serial.println("OTA blocked: URL not from official releases.");
+    if (mqtt.connected()) mqtt.publish(commandFeedPath.c_str(), "RESP: OTA blocked: untrusted URL (otasecure=on)");
+    updateLCDStatus("OTA blocked");
+    return;
+  }
   updateLCDStatus("OTA: downloading");
   if (mqtt.connected()) {
     String m = String("RESP: OTA starting (") + source + "), downloading...";
@@ -374,7 +381,7 @@ void handleRoot() {
   h += "<label>Config page password (blank = no login)</label>";
   h += "<input type='password' name='cfgPass' placeholder='" + String(configPassword.length() ? "•••••• (blank keeps current)" : "set a password") + "'>";
   h += "<label><input type='checkbox' name='autoUpd' style='width:auto'" + String(autoUpdateEnabled ? " checked" : "") + "> Auto-update from GitHub latest</label>";
-  h += "<label><input type='checkbox' name='otaSecure' style='width:auto'" + String(otaSecure ? " checked" : "") + "> Validate OTA TLS certificate</label>";
+  h += "<label><input type='checkbox' name='otaSecure' style='width:auto'" + String(otaSecure ? " checked" : "") + "> Only allow OTA from official GitHub releases</label>";
   h += "<input type='submit' value='Save & reboot'></form></div>";
 
   // Counters + debounce
@@ -631,7 +638,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     m += "update / update:<url> - OTA (latest or URL)\n";
     m += "checkupdate - check GitHub latest now\n";
     m += "set:autoupdate=on|off - auto-update toggle\n";
-    m += "set:otasecure=on|off - OTA cert validation\n";
+    m += "set:otasecure=on|off - official-only OTA\n";
     m += "set:dollars=<val> - Set dollar counter\n";
     m += "set:wins=<val> - Set win counter\n";
     m += "set:debounce=<ms> - Set debounce in ms\n";
