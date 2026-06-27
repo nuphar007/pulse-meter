@@ -5,6 +5,9 @@ Reference items by number (e.g. "let's do #1 and #7"). ⭐ = recommended first.
 
 Status: `[ ]` todo · `[~]` in progress · `[x]` done
 
+> Note: the pulse-counting mechanism (ISR/debounce) is intentionally left untouched —
+> it has been validated across many configurations and is considered stable.
+
 ---
 
 ## A. Usability
@@ -27,32 +30,30 @@ Status: `[ ]` todo · `[~]` in progress · `[x]` done
   and self-updates (or notifies). Whole fleet stays current with no manual commands.
 - [ ] **6. Code cleanups** (from the review) — per-loop NVS reads in `loop()`, duplicate
   web-route registration, LCD flicker (`lcd.clear()` every second), help-text newline bug.
-- [ ] **7. Missed-pulse robustness** — ISR uses a single bool flag; rapid pulses could be
-  undercounted. Use a count/queue so no pulse is lost.
 
 ## C. Business value
 
-- [ ] **8. ⭐ Fleet health alerting** — "machine X hasn't counted in N hours" (likely jam)
+- [ ] **7. ⭐ Fleet health alerting** — "machine X hasn't counted in N hours" (likely jam)
   or "machine offline" → push notification. Catch dead machines same-day.
-- [ ] **9. Payout-rate metric** — compute & report wins ÷ dollars per machine to see which
+- [ ] **8. Payout-rate metric** — compute & report wins ÷ dollars per machine to see which
   machines pay out too much/little.
-- [ ] **10. Daily snapshots** — add NTP time sync and auto-log daily takings at midnight for
+- [ ] **9. Daily snapshots** — add NTP time sync and auto-log daily takings at midnight for
   per-day history instead of just a running total.
 
 ## D. Security
 
-- [ ] **11. OTA integrity** — currently `setInsecure()` (no cert check); a MITM could push
+- [ ] **10. OTA integrity** — currently `setInsecure()` (no cert check); a MITM could push
   fake firmware. Pin GitHub's cert or verify a firmware checksum before applying.
-- [ ] **12. Blank the public WiFi password default** — `"86868686"` is still in the public
+- [ ] **11. Blank the public WiFi password default** — `"86868686"` is still in the public
   source; rely on NVS / AP-mode provisioning instead.
 
 ## E. LCD / polish
 
-- [ ] **13. Richer LCD status** — WiFi signal bars, MQTT-connected icon, uptime.
-- [ ] **14. Rollback on failed boot** — use ESP32 OTA rollback so a bad image auto-reverts.
+- [ ] **12. Richer LCD status** — WiFi signal bars, MQTT-connected icon, uptime.
+- [ ] **13. Rollback on failed boot** — use ESP32 OTA rollback so a bad image auto-reverts.
 
 ---
 
 ### Suggested order
-**1 → 4 → 8** (usability, then reliability, then business value), with #1 built using a
+**1 → 4 → 7** (usability, then reliability, then business value), with #1 built using a
 proper mobile-friendly UI.
