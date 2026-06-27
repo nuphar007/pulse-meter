@@ -1,0 +1,6 @@
+# Force LF so CI (Linux) shell steps and YAML parse correctly, even on Windows.
+* text=auto eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf
+*.ino  text eol=lf
+*.md   text eol=lf

@@ -1,0 +1,82 @@
+name: Build & Release Firmware
+
+# Push a tag like v1.51  ->  builds firmware.bin and publishes a GitHub Release.
+# Push to main          ->  build-check only (catches compile errors, no release).
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+# Allow the workflow token to create Releases and upload assets.
+permissions:
+  contents: write
+
+env:
+  # Change this if your board is different (see README for how to find the FQBN).
+  FQBN: esp32:esp32:esp32
+  SKETCH_DIR: pulse-meter
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install arduino-cli
+        uses: arduino/setup-arduino-cli@v2
+
+      - name: Install ESP32 core
+        run: |
+          arduino-cli config init
+          arduino-cli config add board_manager.additional_urls \
+            https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
+          arduino-cli core update-index
+          arduino-cli core install esp32:esp32
+
+      - name: Install libraries
+        run: |
+          arduino-cli lib install "PubSubClient"
+          arduino-cli lib install "LiquidCrystal_PCF8574"
+
+      - name: Determine version
+        id: ver
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            echo "version=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=${GITHUB_REF_NAME}-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Compile
+        run: |
+          arduino-cli compile \
+            --fqbn "${FQBN}" \
+            --build-property "compiler.cpp.extra_flags=-DFIRMWARE_VERSION=\"${{ steps.ver.outputs.version }}\"" \
+            --export-binaries \
+            "./${SKETCH_DIR}"
+
+      - name: Collect firmware binary
+        run: |
+          mkdir -p dist
+          FQBN_PATH="${FQBN//:/.}"
+          cp "${SKETCH_DIR}/build/${FQBN_PATH}/${SKETCH_DIR}.ino.bin" "dist/firmware-${{ steps.ver.outputs.version }}.bin"
+          cp "${SKETCH_DIR}/build/${FQBN_PATH}/${SKETCH_DIR}.ino.bin" "dist/firmware.bin"
+          ls -la dist
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-${{ steps.ver.outputs.version }}
+          path: dist/firmware*.bin
+
+      - name: Publish Release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "Firmware ${{ steps.ver.outputs.version }}"
+          generate_release_notes: true
+          files: |
+            dist/firmware-${{ steps.ver.outputs.version }}.bin
+            dist/firmware.bin
