@@ -806,13 +806,19 @@ void setup() {
   startWebServer();
 
   // #4: enable the task watchdog now that boot-time blocking work is done.
+  // The init API differs between ESP32 Arduino core 2.x and 3.x — support both.
+#if ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(3, 0, 0)
   esp_task_wdt_config_t wdtCfg = {
     .timeout_ms = WDT_TIMEOUT_S * 1000,
     .idle_core_mask = 0,
     .trigger_panic = true,
   };
-  esp_task_wdt_reconfigure(&wdtCfg);
+  esp_task_wdt_reconfigure(&wdtCfg);   // core 3.x already initialised the TWDT
   esp_task_wdt_add(NULL);
+#else
+  esp_task_wdt_init(WDT_TIMEOUT_S, true);  // core 2.x API: (timeout seconds, panic)
+  esp_task_wdt_add(NULL);
+#endif
   Serial.println("Watchdog armed.");
 }
 
