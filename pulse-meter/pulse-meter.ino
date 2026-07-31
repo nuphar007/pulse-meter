@@ -21,7 +21,7 @@
 // Local-build fallback shown on the LCD when you compile in the Arduino IDE.
 // Bump this to match the release tag you're flashing. CI auto-overrides it with
 // the git tag, so OTA builds always show the exact released version.
-#define FIRMWARE_VERSION "v1.58"
+#define FIRMWARE_VERSION "v1.59"
 #endif
 
 // Revision history is tracked via git tags / GitHub Releases:
@@ -876,11 +876,15 @@ void loop() {
     }
   }
 
-  // #5: periodic auto-update check
+  // #5: auto-update — first check ~5 min after boot (so machines that power off
+  // nightly still get updates), then every 6 hours. Installs only if newer.
+  static bool firstAutoCheck = true;
+  const unsigned long firstCheckDelay = 5UL * 60 * 1000;  // 5 minutes
   if (autoUpdateEnabled && WiFi.status() == WL_CONNECTED &&
-      currentTime - lastAutoUpdateCheck >= autoUpdateInterval) {
+      currentTime - lastAutoUpdateCheck >= (firstAutoCheck ? firstCheckDelay : autoUpdateInterval)) {
     lastAutoUpdateCheck = currentTime;
-    checkAutoUpdate(false, true);   // auto-update: install if newer (opt-in via set:autoupdate=on)
+    firstAutoCheck = false;
+    checkAutoUpdate(false, true);   // opt-in via set:autoupdate=on
   }
 
   // Handle ISR flags in the main loop
