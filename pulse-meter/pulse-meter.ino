@@ -21,7 +21,7 @@
 // Local-build fallback shown on the LCD when you compile in the Arduino IDE.
 // Bump this to match the release tag you're flashing. CI auto-overrides it with
 // the git tag, so OTA builds always show the exact released version.
-#define FIRMWARE_VERSION "v1.56"
+#define FIRMWARE_VERSION "v1.57"
 #endif
 
 // Revision history is tracked via git tags / GitHub Releases:
@@ -223,8 +223,9 @@ void performOTA(const String &url, const char *source) {
   }
 }
 
-// #5: check GitHub for a newer release and self-update if found.
-void checkAutoUpdate(bool manual) {
+// #5: check GitHub for a newer release. `install` = actually OTA if newer (auto-update);
+// otherwise just report whether an update is available.
+void checkAutoUpdate(bool manual, bool install) {
   if (WiFi.status() != WL_CONNECTED) return;
   if (!manual && !autoUpdateEnabled) return;
 
@@ -252,13 +253,19 @@ void checkAutoUpdate(bool manual) {
         String latest = body.substring(s + 1, e);
         Serial.println("Latest: " + latest + ", current: " FIRMWARE_VERSION);
         if (latest.length() > 0 && latest != String(FIRMWARE_VERSION)) {
-          String url = String("https://github.com/") + OTA_REPO + "/releases/download/" + latest + "/firmware.bin";
-          http.end();
-          if (mqtt.connected())
+          if (install) {
+            String url = String("https://github.com/") + OTA_REPO + "/releases/download/" + latest + "/firmware.bin";
+            http.end();
+            if (mqtt.connected())
+              mqtt.publish(commandFeedPath.c_str(),
+                           (String("RESP: Auto-update ") + FIRMWARE_VERSION + " -> " + latest).c_str());
+            performOTA(url, "auto");
+            return;
+          } else if (mqtt.connected()) {
+            // Report-only (manual "checkupdate"): don't install, just notify.
             mqtt.publish(commandFeedPath.c_str(),
-                         (String("RESP: Auto-update ") + FIRMWARE_VERSION + " -> " + latest).c_str());
-          performOTA(url, "auto");
-          return;
+                         (String("RESP: Update available: ") + latest + " (on " FIRMWARE_VERSION "). Send 'update' to install.").c_str());
+          }
         } else if (manual && mqtt.connected()) {
           mqtt.publish(commandFeedPath.c_str(), "RESP: Already on latest (" FIRMWARE_VERSION ")");
         }
@@ -575,7 +582,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     return;
   }
   else if (message == "checkupdate") {
-    checkAutoUpdate(true);
+    checkAutoUpdate(true, false);   // report only — never installs
   }
   else if (message.startsWith("set:autoupdate=")) {
     autoUpdateEnabled = message.endsWith("on");
@@ -871,7 +878,7 @@ void loop() {
   if (autoUpdateEnabled && WiFi.status() == WL_CONNECTED &&
       currentTime - lastAutoUpdateCheck >= autoUpdateInterval) {
     lastAutoUpdateCheck = currentTime;
-    checkAutoUpdate(false);
+    checkAutoUpdate(false, true);   // auto-update: install if newer (opt-in via set:autoupdate=on)
   }
 
   // Handle ISR flags in the main loop
