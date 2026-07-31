@@ -21,7 +21,7 @@
 // Local-build fallback shown on the LCD when you compile in the Arduino IDE.
 // Bump this to match the release tag you're flashing. CI auto-overrides it with
 // the git tag, so OTA builds always show the exact released version.
-#define FIRMWARE_VERSION "v1.57"
+#define FIRMWARE_VERSION "v1.58"
 #endif
 
 // Revision history is tracked via git tags / GitHub Releases:
@@ -463,11 +463,13 @@ void handleSetDebounce() {
 void handleUpdate() {
   if (!requireAuth()) return;
   String url = server.hasArg("url") ? server.arg("url") : String(OTA_LATEST_URL);
+  bool latest = (url == OTA_LATEST_URL);
   server.send(200, "text/html",
-              "<html><body><h2>OTA started.</h2><p>The device will reboot if successful. "
-              "<a href='/'>Back</a></p></body></html>");
+              String("<html><body><h2>") + (latest ? "Checking for update&hellip;" : "OTA started.") +
+              "</h2><p>The device reboots only if a new version is installed. <a href='/'>Back</a></p></body></html>");
   delay(200);
-  performOTA(url, "web");
+  if (latest) checkAutoUpdate(true, true);  // install only if newer; skip re-flash if already current
+  else performOTA(url, "web");              // explicit URL — force flash
 }
 
 void startWebServer() {   // #6: all routes registered once, in one place
@@ -573,12 +575,12 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
 
   if (message.startsWith("RESP:")) return;  // ignore self-responses
 
-  if (message.startsWith("update:")) {
-    performOTA(message.substring(7), "MQTT");
+  if (message == "update" || message == "update:latest") {
+    checkAutoUpdate(true, true);   // install latest ONLY if newer; report if already current
     return;
   }
-  else if (message == "update" || message == "update:latest") {
-    performOTA(OTA_LATEST_URL, "MQTT-latest");
+  else if (message.startsWith("update:")) {
+    performOTA(message.substring(7), "MQTT");   // explicit URL — force flash (e.g. re-flash / downgrade)
     return;
   }
   else if (message == "checkupdate") {
