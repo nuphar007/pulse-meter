@@ -21,7 +21,7 @@
 // Local-build fallback shown on the LCD when you compile in the Arduino IDE.
 // Bump this to match the release tag you're flashing. CI auto-overrides it with
 // the git tag, so OTA builds always show the exact released version.
-#define FIRMWARE_VERSION "v1.55"
+#define FIRMWARE_VERSION "v1.56"
 #endif
 
 // Revision history is tracked via git tags / GitHub Releases:
@@ -933,11 +933,14 @@ void loop() {
     changeDetectedTime = 0;
   }
 
-  // Send pulse data every 10 minutes only if there is a change
+  // Send pulse data promptly on change (near real-time). Rate-limited to one send
+  // per SEND_MIN_INTERVAL so rapid pulses can't flood Adafruit IO. Counters are
+  // cumulative, so if a send is throttled/dropped the next one carries the latest
+  // total — no data is lost.
   static unsigned long lastSendTime = 0;
-  const unsigned long sendDataInterval = 600000;
+  const unsigned long SEND_MIN_INTERVAL = 1500;  // ms — smallest gap between sends
   bool counterChangedSinceLastSend = (dollarsCount != lastSentDollarsCount) || (winsCount != lastSentWinsCount);
-  if (counterChangedSinceLastSend && ((currentTime - lastSendTime >= sendDataInterval) || firstLoopRun)) {
+  if (counterChangedSinceLastSend && (currentTime - lastSendTime >= SEND_MIN_INTERVAL)) {
     sendPulseData(true);
     lastSendTime = currentTime;
   }
